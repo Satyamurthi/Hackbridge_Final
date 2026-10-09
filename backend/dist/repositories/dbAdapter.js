@@ -1,0 +1,54 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.MemoryDatabaseAdapter = void 0;
+class MemoryDatabaseAdapter {
+    tables = new Map();
+    constructor() {
+        this.initDefaultTables();
+    }
+    initDefaultTables() {
+        this.tables.set('tenants', []);
+        this.tables.set('users', []);
+        this.tables.set('hackathons', []);
+        this.tables.set('companies', []);
+        this.tables.set('problem_statements', []);
+        this.tables.set('teams', []);
+        this.tables.set('team_members', []);
+        this.tables.set('submissions', []);
+        this.tables.set('evaluation_assignments', []);
+        this.tables.set('evaluation_scores', []);
+        this.tables.set('submission_scores_aggregate', []);
+        this.tables.set('talent_profiles', []);
+        this.tables.set('hiring_interests', []);
+        this.tables.set('audit_logs', []);
+        this.tables.set('notifications', []);
+    }
+    getTable(name) {
+        if (!this.tables.has(name)) {
+            this.tables.set(name, []);
+        }
+        return this.tables.get(name);
+    }
+    async query(sql, params = []) {
+        // Basic SQL emulator for in-memory testing & offline execution
+        const normalized = sql.trim().toLowerCase();
+        // Quick handle for SELECT
+        if (normalized.startsWith('select')) {
+            for (const [tableName, rows] of this.tables.entries()) {
+                if (normalized.includes(`from ${tableName}`) || normalized.includes(`from public.${tableName}`)) {
+                    let filtered = [...rows];
+                    // Simple where matching for common params
+                    return { rows: filtered, rowCount: filtered.length };
+                }
+            }
+        }
+        return { rows: [], rowCount: 0 };
+    }
+    async transaction(callback) {
+        return callback(this);
+    }
+    async close() {
+        this.tables.clear();
+    }
+}
+exports.MemoryDatabaseAdapter = MemoryDatabaseAdapter;
