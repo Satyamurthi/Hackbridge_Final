@@ -5,8 +5,6 @@
 # Run as: sudo bash deploy-hackbridge.sh
 # =============================================================================
 
-set -e
-
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 WEB_ROOT="/var/www/hackbridge"
 NGINX_SITE="/etc/nginx/sites-available/hackbridge"
@@ -53,23 +51,44 @@ echo "      ✓ Build complete. dist/ created."
 # ── Step 5: Deploy dist/ to web root ─────────────────────────────────────────
 echo "[5/7] Deploying frontend files to $WEB_ROOT..."
 mkdir -p "$WEB_ROOT"
-rm -rf "${WEB_ROOT:?}"/*
-cp -r "$REPO_DIR/dist/." "$WEB_ROOT/"
-chown -R www-data:www-data "$WEB_ROOT"
+
+# Resolve real paths to detect if web root is already a symlink to dist/
+DIST_REAL="$(realpath "$REPO_DIR/dist" 2>/dev/null || echo "$REPO_DIR/dist")"
+WEB_REAL="$(realpath "$WEB_ROOT"   2>/dev/null || echo "$WEB_ROOT")"
+
+if [ "$DIST_REAL" = "$WEB_REAL" ]; then
+    # Web root is already pointing at dist/ — skip copy, files are already there
+    echo "      ✓ Web root already points to dist/ — no copy needed."
+else
+    # Fresh copy: wipe old files, copy new build
+    rm -rf "${WEB_ROOT:?}"/*
+    cp -r "$REPO_DIR/dist/." "$WEB_ROOT/"
+    echo "      ✓ Files copied to $WEB_ROOT."
+fi
+
+chown -R www-data:www-data "$WEB_ROOT" 2>/dev/null || true
 chmod -R 755 "$WEB_ROOT"
-echo "      ✓ Files deployed:"
+echo "      ✓ Files in web root:"
 ls "$WEB_ROOT"
 
-# ── Step 6: Configure Nginx ───────────────────────────────────────────────────
+# ── Step 6: Write Nginx site config ──────────────────────────────────────────
 echo "[6/7] Configuring Nginx for hackbridge.mitt.edu.in..."
 
-cat > "$NGINX_SITE" <<'NGINX'
+# Determine the correct document root
+# If web root was symlinked to dist, point Nginx there directly
+if [ "$DIST_REAL" = "$WEB_REAL" ]; then
+    DOC_ROOT="$DIST_REAL"
+else
+    DOC_ROOT="$WEB_ROOT"
+fi
+
+cat > "$NGINX_SITE" <<NGINX
 server {
     listen 80;
     listen [::]:80;
     server_name hackbridge.mitt.edu.in;
 
-    root /var/www/hackbridge;
+    root $DOC_ROOT;
     index index.html;
 
     # Gzip compression
@@ -86,16 +105,16 @@ server {
     add_header X-XSS-Protection "1; mode=block" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 
-    # Backend API proxy (when backend is running)
+    # Backend API proxy (when backend is running on port 4000)
     location /api/ {
         proxy_pass http://127.0.0.1:4000/api/;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_cache_bypass $http_upgrade;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_cache_bypass \$http_upgrade;
         proxy_read_timeout 300;
         proxy_connect_timeout 300;
     }
@@ -106,24 +125,24 @@ server {
         add_header Cache-Control "public, no-transform, immutable";
     }
 
-    # SPA routing — CRITICAL: all routes fall back to index.html
+    # SPA routing — ALL routes fall back to index.html (React Router)
     location / {
-        try_files $uri $uri/ /index.html;
+        try_files \$uri \$uri/ /index.html;
         add_header Cache-Control "no-cache, no-store, must-revalidate";
     }
 
     error_page 500 502 503 504 /50x.html;
     location = /50x.html {
-        root /var/www/hackbridge;
+        root $DOC_ROOT;
     }
 }
 NGINX
 
-# Enable site, disable default Apache/Nginx placeholder
+# Enable site, remove default placeholder
 ln -sf "$NGINX_SITE" /etc/nginx/sites-enabled/hackbridge
 rm -f /etc/nginx/sites-enabled/default
 
-# Test config
+# Test Nginx config
 nginx -t
 echo "      ✓ Nginx config valid."
 
@@ -131,7 +150,7 @@ echo "      ✓ Nginx config valid."
 echo "[7/7] Reloading Nginx..."
 systemctl reload nginx
 
-# Open firewall
+# Open firewall ports
 if command -v ufw &> /dev/null; then
     ufw allow OpenSSH > /dev/null 2>&1 || true
     ufw allow 80/tcp  > /dev/null 2>&1 || true
@@ -140,7 +159,7 @@ if command -v ufw &> /dev/null; then
     echo "      ✓ Firewall: ports 22, 80, 443 open."
 fi
 
-# ── Verify ────────────────────────────────────────────────────────────────────
+# ── Final Verification ────────────────────────────────────────────────────────
 echo ""
 echo "=============================================="
 echo "  DEPLOYMENT COMPLETE ✓"
@@ -148,13 +167,13 @@ echo "=============================================="
 echo ""
 echo "  Status checks:"
 echo "  • Nginx:   $(systemctl is-active nginx)"
-echo "  • Apache2: $(systemctl is-active apache2 2>/dev/null || echo 'not installed')"
+echo "  • Apache2: $(systemctl is-active apache2 2>/dev/null || echo 'not installed/disabled')"
+echo "  • Doc root: $DOC_ROOT"
 echo ""
-echo "  Files in web root:"
-ls -lh "$WEB_ROOT"
+echo "  Files being served:"
+ls -lh "$DOC_ROOT"
 echo ""
 echo "  Open in browser: http://hackbridge.mitt.edu.in"
 echo ""
-echo "  If still showing Apache page, run:"
-echo "  sudo systemctl stop apache2 && sudo systemctl reload nginx"
+echo "  If page still cached, do a hard refresh: Ctrl+Shift+R"
 echo ""
