@@ -41,15 +41,20 @@ if ! command -v node &> /dev/null || [[ "$(node --version | cut -d. -f1 | tr -d 
 fi
 echo "      ✓ Node.js $(node --version) ready."
 
-# ── Step 4: Build the frontend ────────────────────────────────────────────────
-echo "[4/7] Building frontend (npm install + npm run build)..."
+# ── Step 4: Ensure PM2 log directory exists ──────────────────────────────────
+echo "[4/8] Creating PM2 log directory..."
+mkdir -p "$REPO_DIR/logs"
+echo "      ✓ Log directory ready: $REPO_DIR/logs"
+
+# ── Step 5: Build the frontend ────────────────────────────────────────────────
+echo "[5/8] Building frontend (npm install + npm run build)..."
 cd "$REPO_DIR"
 npm install --silent
 npm run build
 echo "      ✓ Build complete. dist/ created."
 
-# ── Step 5: Deploy dist/ to web root ─────────────────────────────────────────
-echo "[5/7] Deploying frontend files to $WEB_ROOT..."
+# ── Step 6: Deploy dist/ to web root ─────────────────────────────────────────
+echo "[6/8] Deploying frontend files to $WEB_ROOT..."
 mkdir -p "$WEB_ROOT"
 
 # Resolve real paths to detect if web root is already a symlink to dist/
@@ -71,8 +76,8 @@ chmod -R 755 "$WEB_ROOT"
 echo "      ✓ Files in web root:"
 ls "$WEB_ROOT"
 
-# ── Step 6: Write Nginx site config ──────────────────────────────────────────
-echo "[6/7] Configuring Nginx for hackbridge.mitt.edu.in..."
+# ── Step 7: Write Nginx site config ──────────────────────────────────────────
+echo "[7/8] Configuring Nginx for hackbridge.mitt.edu.in..."
 
 # Determine the correct document root
 # If web root was symlinked to dist, point Nginx there directly
@@ -146,8 +151,8 @@ rm -f /etc/nginx/sites-enabled/default
 nginx -t
 echo "      ✓ Nginx config valid."
 
-# ── Step 7: Reload Nginx ──────────────────────────────────────────────────────
-echo "[7/7] Reloading Nginx..."
+# ── Step 8: Reload Nginx ──────────────────────────────────────────────────────
+echo "[8/8] Reloading Nginx..."
 systemctl reload nginx
 
 # Open firewall ports
@@ -159,6 +164,29 @@ if command -v ufw &> /dev/null; then
     echo "      ✓ Firewall: ports 22, 80, 443 open."
 fi
 
+# ── Step 9: Build & start backend with PM2 ────────────────────────────────────
+echo ""
+echo "[9/9] Starting backend with PM2..."
+
+# Install PM2 globally if not present
+if ! command -v pm2 &> /dev/null; then
+    npm install -g pm2 > /dev/null 2>&1
+    echo "      ✓ PM2 installed."
+fi
+
+# Build backend TypeScript
+cd "$REPO_DIR/backend"
+npm install --silent
+npm run build
+cd "$REPO_DIR"
+
+# Start or restart the backend
+pm2 describe hackbridge-backend > /dev/null 2>&1 \
+  && pm2 restart ecosystem.config.cjs \
+  || pm2 start ecosystem.config.cjs
+pm2 save
+echo "      ✓ Backend running on port 4000."
+
 # ── Final Verification ────────────────────────────────────────────────────────
 echo ""
 echo "=============================================="
@@ -166,8 +194,9 @@ echo "  DEPLOYMENT COMPLETE ✓"
 echo "=============================================="
 echo ""
 echo "  Status checks:"
-echo "  • Nginx:   $(systemctl is-active nginx)"
-echo "  • Apache2: $(systemctl is-active apache2 2>/dev/null || echo 'not installed/disabled')"
+echo "  • Nginx:    $(systemctl is-active nginx)"
+echo "  • Apache2:  $(systemctl is-active apache2 2>/dev/null || echo 'not installed/disabled')"
+echo "  • Backend:  $(pm2 describe hackbridge-backend 2>/dev/null | grep -oP 'status.*' | head -1 || echo 'check: pm2 status')"
 echo "  • Doc root: $DOC_ROOT"
 echo ""
 echo "  Files being served:"
