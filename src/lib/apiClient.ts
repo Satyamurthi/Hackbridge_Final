@@ -5,7 +5,30 @@
  * Rubric Judging, Leaderboards, and Recruiter Outreach.
  */
 
-const RAW_API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+function getApiBaseUrl(): string {
+  let base = (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/$/, '');
+
+  if (typeof window !== 'undefined') {
+    // Prevent Mixed Content: If frontend is loaded over HTTPS, never dispatch http://
+    if (window.location.protocol === 'https:' && base.startsWith('http://')) {
+      base = base.replace(/^http:\/\//i, 'https://');
+    }
+
+    // If base URL points to the same hostname, use clean relative paths
+    try {
+      if (base.startsWith('http://') || base.startsWith('https://')) {
+        const parsed = new URL(base);
+        if (parsed.hostname === window.location.hostname) {
+          base = parsed.pathname.replace(/\/$/, '');
+        }
+      }
+    } catch {
+      // retain base
+    }
+  }
+
+  return base;
+}
 
 export const isBackendApiConfigured = true;
 
@@ -37,12 +60,13 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     headers['Authorization'] = `Bearer ${token}`;
   }
 
+  const apiBase = getApiBaseUrl();
   let url: string;
-  if (RAW_API_BASE) {
-    if (RAW_API_BASE.endsWith('/api') && endpoint.startsWith('/api/')) {
-      url = `${RAW_API_BASE}${endpoint.slice(4)}`;
+  if (apiBase) {
+    if (apiBase.endsWith('/api') && endpoint.startsWith('/api/')) {
+      url = `${apiBase}${endpoint.slice(4)}`;
     } else {
-      url = `${RAW_API_BASE}${endpoint}`;
+      url = `${apiBase}${endpoint}`;
     }
   } else {
     url = endpoint;
