@@ -37,10 +37,8 @@ export const RegisterPage: React.FC = () => {
     e.preventDefault();
     setError(null);
 
-    // Fail closed: registration requires a live Supabase connection so that the
-    // database trigger can resolve the role and tenant server-side.
     if (!isConfigured) {
-      setError('Registration is unavailable because this deployment is not connected to Supabase.');
+      setError('Registration is unavailable because this deployment is not connected to a backend service.');
       return;
     }
 
@@ -133,7 +131,7 @@ export const RegisterPage: React.FC = () => {
             )}
             {!isConfigured && (
               <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-[11px] text-rose-700">
-                Registration is unavailable because this deployment is not connected to Supabase.
+                Registration is unavailable because this deployment is not connected to a backend service.
               </div>
             )}
 

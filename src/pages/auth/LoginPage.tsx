@@ -51,7 +51,7 @@ export const LoginPage: React.FC = () => {
         handleDevRolePreview(detectedRole);
         return;
       }
-      setError('Sign-in is unavailable because this deployment is not connected to Supabase.');
+      setError('Sign-in is unavailable because this deployment is not connected to a backend service.');
       return;
     }
 
@@ -95,7 +95,7 @@ export const LoginPage: React.FC = () => {
               <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-[11px] text-amber-800 space-y-1">
                 <p className="font-semibold text-amber-900">Local Dev Preview Mode</p>
                 <p>
-                  To connect live Supabase Auth, set <code className="font-mono bg-amber-100 px-1 rounded">VITE_SUPABASE_URL</code> and <code className="font-mono bg-amber-100 px-1 rounded">VITE_SUPABASE_ANON_KEY</code> in <code className="font-mono bg-amber-100 px-1 rounded">.env</code>.
+                  To connect live backend or Supabase Auth, verify your server configuration in <code className="font-mono bg-amber-100 px-1 rounded">.env</code>.
                 </p>
                 <p className="text-amber-700">
                   For immediate testing, click any <strong>Dev Preview</strong> button below or submit the form.

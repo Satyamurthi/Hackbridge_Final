@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import type { User, Session } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured, isDemoMode } from '../lib/supabase';
+import { api, setToken, clearToken, getToken, isBackendApiConfigured } from '../lib/apiClient';
 import type { Tenant, Profile, UserRole } from '../types/database';
 
 /**
@@ -247,7 +248,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             authListener.subscription.unsubscribe();
           };
         } else {
-          if (typeof window !== 'undefined' && isDemoMode) {
+          // Standalone Backend mode (Express API + PostgreSQL)
+          const token = getToken();
+          if (token) {
+            try {
+              const res = await api.auth.me();
+              if (res?.user && mounted) {
+                const u = res.user;
+                const mappedUser: any = {
+                  id: u.id,
+                  email: u.email,
+                  app_metadata: {},
+                  user_metadata: { full_name: u.full_name },
+                  aud: 'authenticated',
+                  created_at: u.created_at,
+                };
+                const mappedProfile: Profile = {
+                  id: u.id,
+                  tenant_id: u.tenant_id,
+                  role: u.role,
+                  full_name: u.full_name,
+                  email: u.email,
+                  avatar_url: u.avatar_url || null,
+                  phone: u.phone || null,
+                  is_active: u.is_active,
+                  metadata: u.metadata || {},
+                  created_at: u.created_at,
+                  updated_at: u.updated_at,
+                };
+                setUser(mappedUser);
+                setProfile(mappedProfile);
+              }
+            } catch (err) {
+              console.warn('[HackBridge] Stored backend token invalid, clearing:', err);
+              clearToken();
+            }
+          } else if (typeof window !== 'undefined' && isDemoMode) {
             const savedRole = localStorage.getItem('hackbridge_dev_role') as UserRole | null;
             if (savedRole) {
               devSignIn(savedRole);
@@ -302,52 +338,127 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signIn = async (email: string, password: string) => {
-    if (!isSupabaseConfigured) {
-      return {
-        error: new Error('Supabase is not configured. Please set credentials in .env'),
-      };
+    if (isSupabaseConfigured) {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      return { error: error ? new Error(error.message) : null };
     }
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    return { error: error ? new Error(error.message) : null };
+
+    // Standalone Backend mode: Connect to /api/auth/login
+    try {
+      const res = await api.auth.login(email, password);
+      if (res?.token && res?.user) {
+        setToken(res.token);
+        const u = res.user;
+        const mappedUser: any = {
+          id: u.id,
+          email: u.email,
+          app_metadata: {},
+          user_metadata: { full_name: u.full_name },
+          aud: 'authenticated',
+          created_at: u.created_at,
+        };
+        const mappedProfile: Profile = {
+          id: u.id,
+          tenant_id: u.tenant_id,
+          role: u.role,
+          full_name: u.full_name,
+          email: u.email,
+          avatar_url: u.avatar_url || null,
+          phone: u.phone || null,
+          is_active: u.is_active,
+          metadata: u.metadata || {},
+          created_at: u.created_at,
+          updated_at: u.updated_at,
+        };
+        setUser(mappedUser);
+        setProfile(mappedProfile);
+        if (res.tenant) {
+          setTenant(res.tenant as any);
+        }
+        return { error: null };
+      }
+      return { error: new Error('Invalid email or password.') };
+    } catch (err: any) {
+      return { error: new Error(err.message || 'Login failed') };
+    }
   };
 
   const signUp = async (options: SignUpOptions) => {
-    if (!isSupabaseConfigured) {
-      return {
-        error: new Error('Supabase is not configured. Please set credentials in .env'),
-      };
+    if (isSupabaseConfigured) {
+      const resolvedTenantId = tenant?.id ?? null;
+      const { error } = await supabase.auth.signUp({
+        email: options.email,
+        password: options.password,
+        options: {
+          data: {
+            full_name: options.fullName,
+            role: options.role || 'student',
+            ...(resolvedTenantId ? { tenant_id: resolvedTenantId } : {}),
+            phone: options.phone || null,
+            ...(options.metadata || {}),
+          },
+        },
+      });
+      return { error: error ? new Error(error.message) : null };
     }
 
-    // Only a tenant id that came from a real `public.tenants` row may ever be
-    // submitted. When tenant resolution failed the field is omitted entirely
-    // instead of sending a placeholder UUID: the signup trigger then resolves
-    // the tenant server-side (verified email domain -> pilot tenant row).
-    const resolvedTenantId = tenant?.id ?? null;
+    // Standalone Backend mode: Connect to /api/auth/register
+    try {
+      const res = await api.auth.register({
+        email: options.email,
+        password: options.password,
+        fullName: options.fullName,
+        role: options.role || 'student',
+        tenantSlugOrId: tenant?.id || tenant?.slug || 'mitt',
+        phone: options.phone || null,
+        metadata: options.metadata || {},
+      });
 
-    const { error } = await supabase.auth.signUp({
-      email: options.email,
-      password: options.password,
-      options: {
-        data: {
-          full_name: options.fullName,
-          role: options.role || 'student',
-          ...(resolvedTenantId ? { tenant_id: resolvedTenantId } : {}),
-          phone: options.phone || null,
-          ...(options.metadata || {}),
-        },
-      },
-    });
-
-    return { error: error ? new Error(error.message) : null };
+      if (res?.token && res?.user) {
+        setToken(res.token);
+        const u = res.user;
+        const mappedUser: any = {
+          id: u.id,
+          email: u.email,
+          app_metadata: {},
+          user_metadata: { full_name: u.full_name },
+          aud: 'authenticated',
+          created_at: u.created_at,
+        };
+        const mappedProfile: Profile = {
+          id: u.id,
+          tenant_id: u.tenant_id,
+          role: u.role,
+          full_name: u.full_name,
+          email: u.email,
+          avatar_url: u.avatar_url || null,
+          phone: u.phone || null,
+          is_active: u.is_active,
+          metadata: u.metadata || {},
+          created_at: u.created_at,
+          updated_at: u.updated_at,
+        };
+        setUser(mappedUser);
+        setProfile(mappedProfile);
+        if (res.tenant) {
+          setTenant(res.tenant as any);
+        }
+        return { error: null };
+      }
+      return { error: new Error('Registration failed') };
+    } catch (err: any) {
+      return { error: new Error(err.message || 'Registration failed') };
+    }
   };
 
   const signOut = async () => {
     if (isSupabaseConfigured) {
       await supabase.auth.signOut();
     }
+    clearToken();
     if (typeof window !== 'undefined') {
       localStorage.removeItem('hackbridge_dev_role');
     }
@@ -395,7 +506,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         availableTenants,
         role,
         isLoading,
-        isConfigured: isSupabaseConfigured,
+        isConfigured: isSupabaseConfigured || isBackendApiConfigured,
         signIn,
         signUp,
         signOut,

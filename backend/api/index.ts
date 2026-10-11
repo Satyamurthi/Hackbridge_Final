@@ -66,14 +66,16 @@ export function createApp(db: IDatabaseAdapter) {
   const evalService = new EvaluationService(evalRepo, hackathonRepo, submissionRepo, userRepo, auditRepo, notifRepo);
   const storageService = new StorageService();
 
-  // Root healthcheck
-  app.get('/health', (req, res) => {
+  // Root and API healthchecks
+  const healthHandler = (_req: express.Request, res: express.Response) => {
     res.json({
       status: 'healthy',
       service: 'hackbridge-backend',
       timestamp: new Date().toISOString()
     });
-  });
+  };
+  app.get('/health', healthHandler);
+  app.get('/api/health', healthHandler);
 
   // Mount API routers
   app.use('/api/auth', createAuthRoutes(authService));

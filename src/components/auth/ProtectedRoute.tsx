@@ -31,12 +31,11 @@ const ConfigurationErrorScreen: React.FC = () => (
       </div>
       <h1 className="text-xl font-bold text-slate-900">Platform configuration error</h1>
       <p className="text-xs text-slate-600 leading-relaxed">
-        This deployment is not connected to Supabase, so authenticated workspaces are unavailable.
+        This deployment is not connected to a backend service or database, so authenticated workspaces are unavailable.
         {supabaseConfigurationIssue ? ` ${supabaseConfigurationIssue}` : ''}
       </p>
       <p className="text-[11px] text-slate-500">
-        An administrator must set <code className="font-mono">VITE_SUPABASE_URL</code> and{' '}
-        <code className="font-mono">VITE_SUPABASE_ANON_KEY</code> and rebuild the application.
+        An administrator must verify backend server or Supabase credentials in <code className="font-mono">.env</code> and rebuild the application.
       </p>
     </div>
   </div>

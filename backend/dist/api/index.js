@@ -44,14 +44,16 @@ function createApp(db) {
     const submissionService = new services_1.SubmissionService(submissionRepo, teamRepo, hackathonRepo, aiPrescreeningService, auditRepo, notifRepo);
     const evalService = new services_1.EvaluationService(evalRepo, hackathonRepo, submissionRepo, userRepo, auditRepo, notifRepo);
     const storageService = new services_1.StorageService();
-    // Root healthcheck
-    app.get('/health', (req, res) => {
+    // Root and API healthchecks
+    const healthHandler = (_req, res) => {
         res.json({
             status: 'healthy',
             service: 'hackbridge-backend',
             timestamp: new Date().toISOString()
         });
-    });
+    };
+    app.get('/health', healthHandler);
+    app.get('/api/health', healthHandler);
     // Mount API routers
     app.use('/api/auth', (0, authRoutes_1.createAuthRoutes)(authService));
     app.use('/api/hackathons', (0, hackathonRoutes_1.createHackathonRoutes)(hackathonService, hackathonRepo, authService));

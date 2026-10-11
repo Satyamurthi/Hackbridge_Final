@@ -62,10 +62,8 @@ export const supabaseConfigurationIssue: string | null = isSupabaseConfigured
       : 'VITE_SUPABASE_ANON_KEY is not a valid Supabase anon / publishable key.';
 
 if (!isSupabaseConfigured) {
-  console.warn(
-    `[HackBridge] Supabase is not configured (${supabaseConfigurationIssue}) ` +
-      'Protected workspaces are disabled in production builds; ' +
-      'set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file.'
+  console.info(
+    '[HackBridge] Direct Supabase Cloud connection is unconfigured; running in Standalone Backend mode (Express API + PostgreSQL).'
   );
 }
 

@@ -5,11 +5,11 @@
  * Rubric Judging, Leaderboards, and Recruiter Outreach.
  */
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+const RAW_API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 
-export const isBackendApiConfigured = Boolean(API_BASE_URL);
+export const isBackendApiConfigured = true;
 
-function getToken(): string | null {
+export function getToken(): string | null {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem('hackbridge_token');
 }
@@ -37,7 +37,17 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const url = `${API_BASE_URL}${endpoint}`;
+  let url: string;
+  if (RAW_API_BASE) {
+    if (RAW_API_BASE.endsWith('/api') && endpoint.startsWith('/api/')) {
+      url = `${RAW_API_BASE}${endpoint.slice(4)}`;
+    } else {
+      url = `${RAW_API_BASE}${endpoint}`;
+    }
+  } else {
+    url = endpoint;
+  }
+
   const res = await fetch(url, {
     ...options,
     headers
